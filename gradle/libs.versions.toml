@@ -8,6 +8,8 @@ compose-plugin = "1.12.2"
 compose-plugin-experimental = "1.12.0-alpha03"
 compose-navigation3 = "1.2.0"
 compose-adaptive = "1.3.0"
+# Pinned to the version compose-adaptive-navigation3 already resolves; declared because hig-adaptive uses it directly.
+navigationevent = "1.1.0"
 
 # ui
 activity-compose = "1.13.0"
@@ -29,6 +31,7 @@ koin = "4.2.2"
 [libraries]
 compose-adaptive = { module = "org.jetbrains.compose.material3.adaptive:adaptive", version.ref = "compose-adaptive" }
 compose-adaptive-navigation3 = { module = "org.jetbrains.compose.material3.adaptive:adaptive-navigation3", version.ref = "compose-adaptive" }
+navigationevent-compose = { module = "org.jetbrains.androidx.navigationevent:navigationevent-compose", version.ref = "navigationevent" }
 
 # ui
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }

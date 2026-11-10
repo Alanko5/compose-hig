@@ -3,9 +3,15 @@
 package cupertino
 
 import IsIos
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.ScrollableState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -14,32 +20,46 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import kotlin.time.Instant
 import zone.ien.hig.CupertinoBorderedSecureTextField
 import zone.ien.hig.CupertinoBorderedTextField
 import zone.ien.hig.CupertinoButton
 import zone.ien.hig.CupertinoButtonDefaults
+import zone.ien.hig.CupertinoColorPicker
+import zone.ien.hig.CupertinoColorPickerNative
+import zone.ien.hig.CupertinoColorWell
 import zone.ien.hig.CupertinoDatePicker
 import zone.ien.hig.CupertinoDateTimePicker
 import zone.ien.hig.CupertinoSearchTextField
+import zone.ien.hig.CupertinoSearchToken
 import zone.ien.hig.CupertinoSecureTextField
 import zone.ien.hig.CupertinoText
 import zone.ien.hig.CupertinoTextField
 import zone.ien.hig.CupertinoWheelPicker
 import zone.ien.hig.DatePickerStyle
+import zone.ien.hig.icons.CupertinoIcons
+import zone.ien.hig.icons.filled.Heart
+import zone.ien.hig.icons.filled.Star
 import zone.ien.hig.rememberCupertinoDatePickerState
 import zone.ien.hig.rememberCupertinoDateTimePickerState
 import zone.ien.hig.rememberCupertinoPickerState
 import zone.ien.hig.rememberCupertinoSearchTextFieldState
 import zone.ien.hig.rememberCupertinoTimePickerState
+import zone.ien.hig.theme.CupertinoTheme
 
 @Composable
 internal fun TextFieldDemo() {
@@ -114,6 +134,67 @@ internal fun SearchFieldDemo(scrollState: ScrollableState) {
         DemoResult("Query: ${query.ifEmpty { "(none)" }} · ${results.size} results")
         if (results.isEmpty()) CupertinoText(text = "No cities found.")
         results.forEach { CupertinoText(text = it) }
+    }
+    DemoSection("Properties") { DemoToggle("Enabled", enabled) { enabled = it } }
+}
+
+private data class DemoPhoto(val name: String, val kind: String, val favorite: Boolean, val starred: Boolean)
+
+private val demoPhotos = listOf(
+    DemoPhoto("Beach sunset", "Photos", favorite = true, starred = false),
+    DemoPhoto("Beach volleyball", "Videos", favorite = false, starred = true),
+    DemoPhoto("City skyline", "Photos", favorite = false, starred = true),
+    DemoPhoto("Concert", "Videos", favorite = true, starred = true),
+    DemoPhoto("Mountain lake", "Photos", favorite = true, starred = true),
+)
+
+@Composable
+internal fun SearchTokensDemo() {
+    val suggestions = listOf(
+        CupertinoSearchToken("Photos"),
+        CupertinoSearchToken("Videos"),
+        CupertinoSearchToken("Favorites", icon = CupertinoIcons.Filled.Heart),
+        CupertinoSearchToken("Starred", icon = CupertinoIcons.Filled.Star),
+    )
+    var query by rememberSaveable { mutableStateOf("") }
+    var tokenNames by rememberSaveable { mutableStateOf(listOf("Favorites")) }
+    var enabled by rememberSaveable { mutableStateOf(true) }
+    val tokens = tokenNames.mapNotNull { name -> suggestions.firstOrNull { it.text == name } }
+    val results = demoPhotos.filter { photo ->
+        photo.name.contains(query.trim(), ignoreCase = true) && tokens.all { token ->
+            when (token.text) {
+                "Favorites" -> photo.favorite
+                "Starred" -> photo.starred
+                else -> photo.kind == token.text
+            }
+        }
+    }
+    DemoSection(
+        "Preview",
+        "Add filters from the suggestions. With the caret at the start of the query, backspace selects the last token and a second backspace removes it. Tapping a token selects it.",
+    ) {
+        CupertinoSearchTextField(
+            value = query,
+            onValueChange = { query = it },
+            tokens = tokens,
+            onTokensChange = { new -> tokenNames = new.map { it.text } },
+            enabled = enabled,
+            paddingValues = PaddingValues(0.dp),
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { CupertinoText(text = "Search library") },
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            suggestions.filter { it.text !in tokenNames }.forEach { suggestion ->
+                CupertinoButton(
+                    onClick = { tokenNames = tokenNames + suggestion.text },
+                    enabled = enabled,
+                    colors = CupertinoButtonDefaults.tintedButtonColors(),
+                ) { CupertinoText(text = "+ ${suggestion.text}") }
+            }
+        }
+        DemoResult("Tokens: ${tokenNames.ifEmpty { listOf("(none)") }.joinToString()} · ${results.size} results")
+        if (results.isEmpty()) CupertinoText(text = "No items match.")
+        results.forEach { CupertinoText(text = "${it.name} · ${it.kind}") }
     }
     DemoSection("Properties") { DemoToggle("Enabled", enabled) { enabled = it } }
 }
@@ -196,3 +277,55 @@ internal fun NativeImplementationNote(native: Boolean) {
         else -> "Native uses UIKit on iOS and Compose on this platform."
     })
 }
+
+@Composable
+internal fun ColorPickerDemo() {
+    var tint by remember { mutableStateOf(Color(0xFF007AFF)) }
+    var background by remember { mutableStateOf(Color(0xFFFF9500).copy(alpha = 0.35f)) }
+    var recent by remember { mutableStateOf(listOf(Color(0xFF34C759), Color(0xFFFF3B30))) }
+    var enabled by rememberSaveable { mutableStateOf(true) }
+    var native by rememberSaveable { mutableStateOf(false) }
+    var showNative by remember { mutableStateOf(false) }
+    DemoSection("Preview", "Tap a row or the color well to open the picker.") {
+        Box(
+            Modifier.fillMaxWidth().height(96.dp).clip(CupertinoTheme.shapes.large).background(background),
+            contentAlignment = Alignment.Center,
+        ) {
+            CupertinoText(text = "Hello, colors", color = tint, style = CupertinoTheme.typography.title2)
+        }
+        CupertinoColorPicker(
+            selection = tint, onSelectionChange = { tint = it }, supportsOpacity = false, enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        ) { CupertinoText(text = "Text color") }
+        CupertinoColorPicker(
+            selection = background, onSelectionChange = { background = it }, enabled = enabled,
+            recentColors = recent, onRecentColorsChange = { recent = it },
+            modifier = Modifier.fillMaxWidth(),
+        ) { CupertinoText(text = "Background (with opacity)") }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            CupertinoText(text = "Standalone well", modifier = Modifier.weight(1f))
+            CupertinoColorWell(selection = tint, onSelectionChange = { tint = it }, supportsOpacity = false, enabled = enabled)
+        }
+        DemoResult("Text: ${tint.demoHex()} · Background: ${background.demoHex()} · ${(background.alpha * 100).roundToInt()}%")
+    }
+    DemoSection("Properties") {
+        DemoToggle("Enabled", enabled) { enabled = it }
+        DemoToggle("Native implementation", native) { native = it }
+        if (native) {
+            CupertinoButton(onClick = { showNative = true }, enabled = enabled,
+                colors = CupertinoButtonDefaults.tintedButtonColors()) { CupertinoText(text = "Open native picker") }
+        }
+        NativeImplementationNote(native)
+    }
+    if (showNative) {
+        CupertinoColorPickerNative(
+            color = tint,
+            onColorChanged = { tint = it },
+            onDismissRequest = { showNative = false },
+            supportsAlpha = false,
+        )
+    }
+}
+
+private fun Color.demoHex(): String =
+    "#" + (toArgb() and 0xFFFFFF).toString(16).uppercase().padStart(6, '0')

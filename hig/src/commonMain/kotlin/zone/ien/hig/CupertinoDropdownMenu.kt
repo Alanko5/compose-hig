@@ -464,7 +464,7 @@ private fun CupertinoMenuScope.ActionWithoutPadding(
                 .clickable(
                     interactionSource = interactionSource,
                     enabled = enabled,
-                    onClick = onClick,
+                    onClick = onActionSelected?.let { selected -> { onClick(); selected() } } ?: onClick,
                     onClickLabel = onClickLabel,
                     role = Role.DropdownList,
                 )
@@ -564,8 +564,6 @@ private fun DropdownMenuContent(
     content: @Composable () -> Unit,
 ) {
     val transition = rememberTransition(expandedStates, "DropDownMenu")
-    val animationScope = rememberCoroutineScope()
-    val density = LocalDensity.current
 
     val scale by transition.animateFloat(
         transitionSpec = {
@@ -578,9 +576,6 @@ private fun DropdownMenuContent(
             if (false isTransitioningTo true) MenuEnterTransition else MenuExitTransition
         },
     ) { if (it) 1f else 0f }
-
-    val shape = CupertinoDropdownMenuDefaults.Shape
-    val interactiveHighlight = remember(animationScope) { InteractiveHighlight(animationScope = animationScope) }
 
     Box(
         modifier = Modifier
@@ -597,72 +592,102 @@ private fun DropdownMenuContent(
             .semantics { isTraversalGroup = true },
         propagateMinConstraints = true,
     ) {
-        CompositionLocalProvider(
-            LocalContainerColor provides Color.Transparent,
-            LocalSeparatorColor provides CupertinoDropdownMenuDefaults.DividerColor,
-        ) {
-            ProvideTextStyle(CupertinoTheme.typography.body) {
-                SubcomposeLayout(
-                    modifier = modifier
-                        .drawBackdrop(
-                            backdrop = backdrop,
-                            shape = { shape },
-                            effects = {
-                                cupertinoGlassEffects(
-                                    30.dp.toPx(),
-                                    6.dp.toPx(),
-                                    10.dp.toPx(),
-                                )
-                            },
-                            shadow = { MenuShadow },
-                            layerBlock = {
-                                val w = this.size.width
-                                val h = this.size.height
-                                val progress = interactiveHighlight.pressProgress
-                                val s = lerp(1f, 1f + 4.dp.toPx() / h, progress)
-                                val maxOffset = this.size.minDimension
-                                val initialDerivative = 0.05f
-                                val offset = interactiveHighlight.offset
+        CupertinoMenuPanel(
+            width = width,
+            maxHeight = maxHeight,
+            containerColor = containerColor,
+            scrollState = scrollState,
+            backdrop = backdrop,
+            modifier = modifier,
+            content = content,
+        )
+    }
+}
 
-                                translationX = maxOffset * tanh(initialDerivative * offset.x / maxOffset)
-                                translationY = maxOffset * tanh(initialDerivative * offset.y / maxOffset)
+/**
+ * The glass panel that lays out [CupertinoMenuScope] items. Shared by [CupertinoDropdownMenu] and
+ * [CupertinoContextMenuBox] so both menus render identically.
+ */
+@Composable
+internal fun CupertinoMenuPanel(
+    width: Dp,
+    maxHeight: Dp,
+    containerColor: Color,
+    scrollState: ScrollState,
+    backdrop: Backdrop,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val animationScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val shape = CupertinoDropdownMenuDefaults.Shape
+    val interactiveHighlight = remember(animationScope) { InteractiveHighlight(animationScope = animationScope) }
 
-                                val maxDragScale = 4.dp.toPx() / h
-                                val offsetAngle = atan2(offset.y, offset.x)
+    CompositionLocalProvider(
+        LocalContainerColor provides Color.Transparent,
+        LocalSeparatorColor provides CupertinoDropdownMenuDefaults.DividerColor,
+    ) {
+        ProvideTextStyle(CupertinoTheme.typography.body) {
+            SubcomposeLayout(
+                modifier = modifier
+                    .drawBackdrop(
+                        backdrop = backdrop,
+                        shape = { shape },
+                        effects = {
+                            cupertinoGlassEffects(
+                                30.dp.toPx(),
+                                6.dp.toPx(),
+                                10.dp.toPx(),
+                            )
+                        },
+                        shadow = { MenuShadow },
+                        layerBlock = {
+                            val w = this.size.width
+                            val h = this.size.height
+                            val progress = interactiveHighlight.pressProgress
+                            val s = lerp(1f, 1f + 4.dp.toPx() / h, progress)
+                            val maxOffset = this.size.minDimension
+                            val initialDerivative = 0.05f
+                            val offset = interactiveHighlight.offset
 
-                                scaleX = s + maxDragScale * abs(cos(offsetAngle) * offset.x / this.size.maxDimension) * (w / h).fastCoerceAtMost(1f)
-                                scaleY = s + maxDragScale * abs(sin(offsetAngle) * offset.y / this.size.maxDimension) * (h / w).fastCoerceAtMost(1f)
-                            },
-                            onDrawSurface = {
-                                drawRect(containerColor)
-                            },
-                        )
-                        .glassEdge(shape, softShadow = true)
-                        .heightIn(max = maxHeight)
-                        .padding(10.dp)
-                        .verticalScroll(scrollState),
-                ) { constraints ->
-                    val minWidth = with(density) { width.roundToPx() }.coerceAtMost(constraints.maxWidth)
-                    val itemConstraints = constraints.copy(
-                        minWidth = minWidth,
-                        maxWidth = constraints.maxWidth
+                            translationX = maxOffset * tanh(initialDerivative * offset.x / maxOffset)
+                            translationY = maxOffset * tanh(initialDerivative * offset.y / maxOffset)
+
+                            val maxDragScale = 4.dp.toPx() / h
+                            val offsetAngle = atan2(offset.y, offset.x)
+
+                            scaleX = s + maxDragScale * abs(cos(offsetAngle) * offset.x / this.size.maxDimension) * (w / h).fastCoerceAtMost(1f)
+                            scaleY = s + maxDragScale * abs(sin(offsetAngle) * offset.y / this.size.maxDimension) * (h / w).fastCoerceAtMost(1f)
+                        },
+                        onDrawSurface = {
+                            drawRect(containerColor)
+                        },
                     )
-                    val itemPlaceables = subcompose(CupertinoDropdownMenuSlots.Item, content)
-                        .fastMap { it.measure(itemConstraints) }
-                    val allPlacements = buildList(itemPlaceables.size * 2) {
-                        itemPlaceables.fastForEach { add(it) }
-                    }
+                    .glassEdge(shape, softShadow = true)
+                    .heightIn(max = maxHeight)
+                    .padding(10.dp)
+                    .verticalScroll(scrollState),
+            ) { constraints ->
+                val minWidth = with(density) { width.roundToPx() }.coerceAtMost(constraints.maxWidth)
+                val itemConstraints = constraints.copy(
+                    minWidth = minWidth,
+                    maxWidth = constraints.maxWidth
+                )
+                val itemPlaceables = subcompose(CupertinoDropdownMenuSlots.Item, content)
+                    .fastMap { it.measure(itemConstraints) }
+                val allPlacements = buildList(itemPlaceables.size * 2) {
+                    itemPlaceables.fastForEach { add(it) }
+                }
 
-                    val layoutWidth = allPlacements.maxOfOrNull { it.width }
-                        ?.coerceAtLeast(minWidth) ?: minWidth
-                    val layoutHeight = allPlacements.fastSumBy { it.height }
+                val layoutWidth = allPlacements.maxOfOrNull { it.width }
+                    ?.coerceAtLeast(minWidth) ?: minWidth
+                val layoutHeight = allPlacements.fastSumBy { it.height }
 
-                    layout(layoutWidth, layoutHeight) {
-                        var y = 0
-                        allPlacements.fastForEach {
-                            it.placeRelative(0, y)
-                            y += it.height
-                        }
+                layout(layoutWidth, layoutHeight) {
+                    var y = 0
+                    allPlacements.fastForEach {
+                        it.placeRelative(0, y)
+                        y += it.height
                     }
                 }
             }
@@ -770,7 +795,10 @@ internal data class DropdownMenuPositionProvider(
 }
 
 // ✅ Added hasIcon
-internal class CupertinoMenuScopeImpl : CupertinoMenuScope {
+internal class CupertinoMenuScopeImpl(
+    /** Invoked after an enabled action's own `onClick`; the context menu uses it to dismiss itself. */
+    val onActionSelected: (() -> Unit)? = null,
+) : CupertinoMenuScope {
     var pickerCount: Int by mutableStateOf(0)
     var iconCount: Int by mutableStateOf(0)
 

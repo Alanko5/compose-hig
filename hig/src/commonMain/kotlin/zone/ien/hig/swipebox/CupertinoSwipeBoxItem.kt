@@ -27,9 +27,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -59,6 +57,9 @@ import androidx.compose.ui.zIndex
 import com.kyant.capsule.ContinuousCapsule
 import zone.ien.hig.CupertinoIcon
 import zone.ien.hig.CupertinoSwipeBoxDefaults
+import zone.ien.hig.CupertinoLabelIconAlignment
+import zone.ien.hig.CupertinoLabelLayout
+import zone.ien.hig.CupertinoLabelStyle
 import zone.ien.hig.CupertinoText
 import zone.ien.hig.ExperimentalCupertinoApi
 import zone.ien.hig.LocalContentColor
@@ -233,11 +234,8 @@ fun RowScope.CupertinoSwipeBoxItem(
                         horizontalBias = animHorizontalBias,
                     ),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    icon?.let {
+                val actionIcon: (@Composable () -> Unit)? = icon?.let {
+                    {
                         CupertinoIcon(
                             imageVector = it,
                             contentDescription = onClickLabel,
@@ -245,14 +243,30 @@ fun RowScope.CupertinoSwipeBoxItem(
                             modifier = Modifier.requiredSize(16.dp),
                         )
                     }
-
-                    label?.let {
+                }
+                val actionTitle: (@Composable () -> Unit)? = label?.let {
+                    {
                         CupertinoText(
                             it,
                             fontSize = 12.sp,
                             maxLines = 1,
                         )
                     }
+                }
+                when {
+                    // Same geometry as the former Row(CenterVertically, spacedBy(4.dp)).
+                    actionIcon != null && actionTitle != null -> CupertinoLabelLayout(
+                        title = actionTitle,
+                        icon = actionIcon,
+                        modifier = Modifier,
+                        style = CupertinoLabelStyle.TitleAndIcon,
+                        spacing = 4.dp,
+                        iconAlignment = CupertinoLabelIconAlignment.Center,
+                        // The icon keeps announcing onClickLabel as before.
+                        clearIconSemantics = false,
+                    )
+                    actionIcon != null -> actionIcon()
+                    actionTitle != null -> actionTitle()
                 }
             }
             }

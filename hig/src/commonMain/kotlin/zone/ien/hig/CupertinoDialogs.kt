@@ -702,7 +702,7 @@ private fun DialogSheet(
 }
 
 @Composable
-private fun AnimatedSheet(
+internal fun AnimatedSheet(
     visible: Boolean,
     onDismissRequest: () -> Unit,
     properties: DialogProperties = DialogProperties(),

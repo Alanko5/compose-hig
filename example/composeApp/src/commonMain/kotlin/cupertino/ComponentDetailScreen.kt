@@ -139,23 +139,35 @@ fun ComponentDetailScreen(component: CatalogComponent, scrollState: ScrollState 
                             CatalogComponent.PageControl -> PageControlDemo()
                             CatalogComponent.TextField -> TextFieldDemo()
                             CatalogComponent.SearchField -> SearchFieldDemo(scrollState)
+                            CatalogComponent.SearchTokens -> SearchTokensDemo()
                             CatalogComponent.WheelPicker -> WheelPickerDemo()
                             CatalogComponent.DatePicker, CatalogComponent.TimePicker, CatalogComponent.DateTimePicker -> DateTimeDemo(component)
+                            CatalogComponent.ColorPicker -> ColorPickerDemo()
                             CatalogComponent.Progress -> ProgressDemo()
+                            CatalogComponent.Gauge -> GaugeDemo()
+                            CatalogComponent.PullToRefresh -> PullToRefreshDemo()
                             CatalogComponent.Badge -> BadgeDemo()
                             CatalogComponent.EmptyState -> EmptyStateDemo()
                             CatalogComponent.AlertDialog -> AlertDialogDemo()
                             CatalogComponent.ActionSheet -> ActionSheetDemo()
                             CatalogComponent.Menu -> MenuDemo()
+                            CatalogComponent.ContextMenu -> ContextMenuDemo()
                             CatalogComponent.PopupButton -> PopupButtonDemo()
                             CatalogComponent.Popover -> PopoverDemo()
+                            CatalogComponent.ShareSheet -> ShareSheetDemo()
+                            CatalogComponent.FullScreenCover -> FullScreenCoverDemo()
                             CatalogComponent.BottomSheet -> BottomSheetDemo(sheetState.bottomSheetState) {
                                 scope.launch { sheetState.bottomSheetState.show() }
                             }
                             CatalogComponent.SwipeBox -> SwipeBoxDemo(scrollState)
+                            CatalogComponent.DisclosureGroup -> DisclosureGroupDemo()
+                            CatalogComponent.PageTabView -> PageTabViewDemo()
                             CatalogComponent.NavigationBar -> NavigationBarDemo()
+                            CatalogComponent.Sidebar -> SidebarDemo()
                             CatalogComponent.TopBar -> TopBarDemo()
+                            CatalogComponent.WebView -> WebViewDemo()
                             CatalogComponent.Foundation -> FoundationDemo()
+                            CatalogComponent.Label -> LabelDemo()
                         }
                     }
                     DemoSection("API") {
@@ -174,7 +186,7 @@ private val LocalDemoPhoto = staticCompositionLocalOf { false }
 private val glassComponents = setOf(
     CatalogComponent.LiquidButton, CatalogComponent.FloatingActionButton, CatalogComponent.Switch,
     CatalogComponent.Slider, CatalogComponent.SegmentedControl, CatalogComponent.NavigationBar,
-    CatalogComponent.TopBar, CatalogComponent.AlertDialog, CatalogComponent.Menu,
+    CatalogComponent.TopBar, CatalogComponent.AlertDialog, CatalogComponent.Menu, CatalogComponent.ContextMenu,
     CatalogComponent.PopupButton, CatalogComponent.Popover,
 )
 

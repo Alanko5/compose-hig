@@ -28,6 +28,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
@@ -102,6 +105,32 @@ class ComponentCatalogUiTest {
         onNodeWithText("Share").performClick()
         mainClock.advanceTimeBy(500)
         onNodeWithTag("demo-result").assertTextContains("Share selected")
+    }
+
+    @Test
+    fun contextMenuOpensOnLongPressAndDismissesAfterSelection() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        setContent {
+            CupertinoTheme {
+                Box(Modifier.size(400.dp, 800.dp)) { ComponentDetailScreen(CatalogComponent.ContextMenu) {} }
+            }
+        }
+        mainClock.advanceTimeBy(1000)
+        onNodeWithText("Trip ideas").performTouchInput { longClick() }
+        mainClock.advanceTimeBy(1000)
+        onNodeWithText("Share").assertExists()
+        onAllNodes(isRoot()).fetchSemanticsNodes().indices.forEach { index ->
+            val pixels = onAllNodes(isRoot())[index].captureToImage().toPixelMap()
+            val output = BufferedImage(pixels.width, pixels.height, BufferedImage.TYPE_INT_ARGB)
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) output.setRGB(x, y, pixels[x, y].toArgb())
+            val file = File("build/reports/catalog/ContextMenu-open-$index.png")
+            file.parentFile.mkdirs()
+            ImageIO.write(output, "png", file)
+        }
+        onNodeWithText("Share").performClick()
+        mainClock.advanceTimeBy(1000)
+        onNodeWithTag("demo-result").assertTextContains("Note shared")
+        onAllNodesWithText("Share").assertCountEquals(0)
     }
 
     @Test
@@ -388,7 +417,7 @@ class ComponentCatalogUiTest {
         onNodeWithText("Stepper", useUnmergedTree = true).assertIsDisplayed()
         onNodeWithText("Cancel").performClick()
         mainClock.advanceTimeBy(500)
-        onNodeWithText("28 / 28").assertIsDisplayed()
+        onNodeWithText("${CatalogComponent.entries.size} / ${CatalogComponent.entries.size}").assertIsDisplayed()
         val pixels = onAllNodes(isRoot())[0].captureToImage().toPixelMap()
         val output = BufferedImage(pixels.width, pixels.height, BufferedImage.TYPE_INT_ARGB)
         for (y in 0 until pixels.height) for (x in 0 until pixels.width) output.setRGB(x, y, pixels[x, y].toArgb())

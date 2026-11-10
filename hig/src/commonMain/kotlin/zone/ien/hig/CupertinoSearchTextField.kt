@@ -40,6 +40,7 @@ import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.interaction.Interaction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -67,16 +68,24 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -202,7 +211,266 @@ fun CupertinoSearchTextField(
     },
     trailingIcon: @Composable () -> Unit = {},
 ) {
+    SearchTextFieldImpl(
+        value = value,
+        onValueChange = onValueChange,
+        state = state,
+        colors = colors,
+        modifier = modifier,
+        paddingValues = paddingValues,
+        shape = shape,
+        enabled = enabled,
+        readOnly = readOnly,
+        textStyle = textStyle,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        visualTransformation = visualTransformation,
+        interactionSource = interactionSource,
+        placeholder = placeholder,
+        cancelButton = cancelButton,
+        leadingIcon = leadingIcon,
+        trailingIcon = trailingIcon,
+        tokenConfig = null,
+    )
+}
+
+/**
+ * Search text field with search tokens, the equivalent of `UISearchTextField.tokens` and SwiftUI's
+ * `.searchable(text:tokens:)`.
+ *
+ * The [tokens] are drawn as tinted capsule chips (icon + text) before the text cursor and scroll
+ * horizontally once they take more than ~60% of the field. Editing follows `UISearchTextField`:
+ * - a backspace with the caret at the start of the text (for example while the text is empty) **selects**
+ *   the last token (it is highlighted);
+ * - a second backspace **deletes** the selected token;
+ * - typing while a token is selected deselects it (the typed text is kept, the token stays);
+ * - tapping a token selects it and focuses the field, so the next backspace deletes it;
+ * - the clear (x) button removes the text and every token, and the default cancel button does the same.
+ *
+ * Backspace works with hardware keyboards (key events) and with soft keyboards that report a deletion as a
+ * text edit (the iOS keyboard, Android IMEs that call `deleteSurroundingText`): while tokens are present
+ * and the field is editable, the field keeps an invisible zero-width space (U+200B) in front of the text,
+ * and deleting it counts as a backspace. The text passed to [onValueChange] never contains it, but the
+ * field's own accessibility text and selection do, so a caret placed before it is moved after it.
+ *
+ * When [readOnly] or not [enabled], tokens cannot be selected or removed by the user.
+ *
+ * Every token is exposed to accessibility services with [tokenContentDescription] ("<text>, token") and a
+ * [tokenRemoveActionLabel] ("Remove <text>") custom action.
+ *
+ * Tokens are not created from typed text automatically; add them yourself (e.g. from suggestion buttons
+ * below the field) by passing a new list.
+ *
+ * @param value the text typed after the tokens
+ * @param onValueChange called with the new text
+ * @param tokens the tokens currently in the field, in display order
+ * @param onTokensChange called with the new token list when the user removes a token (backspace,
+ * clear button, cancel button or the accessibility remove action)
+ * @param tokenContentDescription accessibility description of a token
+ * @param tokenRemoveActionLabel label of the accessibility custom action that removes a token
+ * @param tokenSelectActionLabel accessibility label of a token's click (select) action
+ * @param tokenColors colors of the default token chip
+ * @param token renders one token chip; `selected` is `true` for the token the next backspace deletes.
+ * Selection, click and accessibility handling are added around it.
+ * @see CupertinoSearchTextField for the remaining parameters
+ */
+@Composable
+@ExperimentalCupertinoApi
+@OptIn(ExperimentalCupertinoApi::class)
+fun CupertinoSearchTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    tokens: List<CupertinoSearchToken>,
+    onTokensChange: (List<CupertinoSearchToken>) -> Unit,
+    state: CupertinoSearchTextFieldState = rememberCupertinoSearchTextFieldState(),
+    colors: CupertinoTextFieldColors = CupertinoSearchTextFieldDefaults.colors(),
+    modifier: Modifier = Modifier,
+    paddingValues: PaddingValues = CupertinoSearchTextFieldDefaults.PaddingValues,
+    shape: Shape = CupertinoSearchTextFieldDefaults.shape,
+    enabled: Boolean = true,
+    readOnly: Boolean = false,
+    textStyle: TextStyle = LocalTextStyle.current,
+    keyboardOptions: KeyboardOptions =
+        remember {
+            KeyboardOptions(imeAction = ImeAction.Search)
+        },
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    placeholder: @Composable () -> Unit = {
+        CupertinoText("Search")
+    },
+    cancelButton: @Composable (() -> Unit)? = {
+        CupertinoSearchTextFieldDefaults.cancelButton(
+            onValueChange = {
+                onValueChange(it)
+                onTokensChange(emptyList())
+            },
+            interactionSource = interactionSource,
+        )
+    },
+    leadingIcon: @Composable () -> Unit = {
+        CupertinoSearchTextFieldDefaults.leadingIcon()
+    },
+    trailingIcon: @Composable () -> Unit = {},
+    tokenContentDescription: (CupertinoSearchToken) -> String = CupertinoSearchTokenDefaults::contentDescription,
+    tokenRemoveActionLabel: (CupertinoSearchToken) -> String = CupertinoSearchTokenDefaults::removeActionLabel,
+    tokenSelectActionLabel: String = CupertinoSearchTokenDefaults.SelectActionLabel,
+    tokenColors: CupertinoSearchTokenColors = CupertinoSearchTokenDefaults.colors(),
+    token: @Composable (token: CupertinoSearchToken, selected: Boolean) -> Unit = { t, selected ->
+        CupertinoSearchTokenDefaults.Token(
+            token = t,
+            selected = selected,
+            enabled = enabled,
+            colors = tokenColors,
+        )
+    },
+) {
+    SearchTextFieldImpl(
+        value = value,
+        onValueChange = onValueChange,
+        state = state,
+        colors = colors,
+        modifier = modifier,
+        paddingValues = paddingValues,
+        shape = shape,
+        enabled = enabled,
+        readOnly = readOnly,
+        textStyle = textStyle,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        visualTransformation = visualTransformation,
+        interactionSource = interactionSource,
+        placeholder = placeholder,
+        cancelButton = cancelButton,
+        leadingIcon = leadingIcon,
+        trailingIcon = trailingIcon,
+        tokenConfig = SearchTokenConfig(
+            tokens = tokens,
+            onTokensChange = onTokensChange,
+            token = token,
+            labels = SearchTokenLabels(tokenContentDescription, tokenRemoveActionLabel, tokenSelectActionLabel),
+        ),
+    )
+}
+
+@OptIn(ExperimentalCupertinoApi::class)
+private class SearchTokenConfig(
+    val tokens: List<CupertinoSearchToken>,
+    val onTokensChange: (List<CupertinoSearchToken>) -> Unit,
+    val token: @Composable (CupertinoSearchToken, Boolean) -> Unit,
+    val labels: SearchTokenLabels,
+)
+
+@OptIn(ExperimentalCupertinoApi::class)
+private class LatestTokenFieldState(
+    var tokens: List<CupertinoSearchToken>,
+    var text: String,
+)
+
+@Composable
+@OptIn(ExperimentalCupertinoApi::class)
+private fun SearchTextFieldImpl(
+    value: String,
+    onValueChange: (String) -> Unit,
+    state: CupertinoSearchTextFieldState,
+    colors: CupertinoTextFieldColors,
+    modifier: Modifier,
+    paddingValues: PaddingValues,
+    shape: Shape,
+    enabled: Boolean,
+    readOnly: Boolean,
+    textStyle: TextStyle,
+    keyboardOptions: KeyboardOptions,
+    keyboardActions: KeyboardActions,
+    visualTransformation: VisualTransformation,
+    interactionSource: MutableInteractionSource,
+    placeholder: @Composable () -> Unit,
+    cancelButton: @Composable (() -> Unit)?,
+    leadingIcon: @Composable () -> Unit,
+    trailingIcon: @Composable () -> Unit,
+    tokenConfig: SearchTokenConfig?,
+) {
     val focusManager = LocalFocusManager.current
+    val tokens = tokenConfig?.tokens.orEmpty()
+    val editable = enabled && !readOnly
+
+    var rawSelectedTokenIndex by remember { mutableStateOf<Int?>(null) }
+    val editState = SearchTokenEditState(
+        tokens = tokens,
+        text = value,
+        selectedTokenIndex = normalizedSelectedTokenIndex(rawSelectedTokenIndex, tokens.size),
+    )
+    // What the field is showing right now. Refreshed from the parameters on every composition and updated
+    // synchronously by dispatch, so several edits within one frame never compare against a stale value.
+    val latest = remember { LatestTokenFieldState(tokens, value) }
+    latest.tokens = tokens
+    latest.text = value
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
+    val latestOnTokensChange by rememberUpdatedState(tokenConfig?.onTokensChange)
+
+    // Returns true when the action changed anything (i.e. the event is consumed).
+    val dispatch: (SearchTokenEditAction<CupertinoSearchToken>) -> Boolean = remember {
+        { action ->
+            val current = SearchTokenEditState(latest.tokens, latest.text, rawSelectedTokenIndex).normalized()
+            val next = current.reduce(action)
+            if (next == current) {
+                false
+            } else {
+                rawSelectedTokenIndex = next.selectedTokenIndex
+                if (next.tokens != current.tokens) {
+                    latest.tokens = next.tokens
+                    latestOnTokensChange?.invoke(next.tokens)
+                }
+                if (next.text != current.text) {
+                    latest.text = next.text
+                    latestOnValueChange(next.text)
+                }
+                true
+            }
+        }
+    }
+
+    // The token field drives a TextFieldValue (as BasicTextField(String) does internally) so it can keep
+    // SearchTokenSentinel in front of the text while tokens are present: a soft-keyboard backspace at the
+    // start of the text deletes the sentinel, which is detected here as a backspace without any key event.
+    val useSentinel = tokenConfig != null && editable && tokens.isNotEmpty()
+    var fieldValueState by remember { mutableStateOf(TextFieldValue(text = value)) }
+    val fieldValue = fieldValueState.copy(text = value)
+    SideEffect {
+        if (fieldValue.selection != fieldValueState.selection || fieldValue.composition != fieldValueState.composition) {
+            fieldValueState = fieldValue
+        }
+    }
+    val tokenFieldValue = if (useSentinel) fieldValue.withSearchTokenSentinel() else fieldValue
+    val tokenVisualTransformation = remember(visualTransformation, useSentinel) {
+        if (useSentinel && visualTransformation != VisualTransformation.None) {
+            SearchTokenSentinelVisualTransformation(visualTransformation)
+        } else {
+            visualTransformation
+        }
+    }
+    val onTokenFieldValueChange: (TextFieldValue) -> Unit = { newValue ->
+        val edit = if (useSentinel) {
+            interpretSearchTokenFieldEdit(newValue, latest.text)
+        } else {
+            SearchTokenFieldEdit.Value(newValue)
+        }
+        when (edit) {
+            SearchTokenFieldEdit.BackspaceAtStart -> {
+                dispatch(SearchTokenEditAction.BackspaceAtTextStart)
+                // Rejecting the edit is enough to restore the sentinel: the core text field recomposes after
+                // every onValueChange and resets its edit buffer to the value it was given.
+                fieldValueState = fieldValueState.copy(selection = TextRange.Zero, composition = null)
+            }
+            is SearchTokenFieldEdit.Value -> {
+                fieldValueState = edit.value
+                // Always forwarded when it differs from what the field showed (never gated on stale state).
+                if (edit.value.text != latest.text) dispatch(SearchTokenEditAction.TextChange(edit.value.text))
+            }
+        }
+    }
+    val fieldFocusRequester = remember { FocusRequester() }
 
     val density = LocalDensity.current
     val contentLineHeight = when {
@@ -274,6 +542,7 @@ fun CupertinoSearchTextField(
     LaunchedEffect(state, interactionSource) {
         snapshotFlow { focused }.collectLatest {
             state.setFocused(it)
+            if (!it) rawSelectedTokenIndex = null
         }
     }
 
@@ -310,30 +579,115 @@ fun CupertinoSearchTextField(
                 alpha = ((1f - state.progress * 4 / (1 - state.paddingToHeight))).coerceIn(0f, 1f)
             }
 
-        CupertinoBorderedTextField(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .graphicsLayer {
-                        scaleX = 1f + glassInteraction.pressProgress * 0.01f
-                        scaleY = 1f + glassInteraction.pressProgress * 0.015f
-                    }
-                    .then(if (backdrop != null) Modifier.drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { shape },
-                        effects = {
-                            cupertinoGlassEffects(
-                                12.dp.toPx(),
-                                CupertinoGlassDefaults.refractionHeight.toPx(),
-                                CupertinoGlassDefaults.refractionAmount.toPx(),
+        val fieldModifier =
+            Modifier
+                .weight(1f)
+                .graphicsLayer {
+                    scaleX = 1f + glassInteraction.pressProgress * 0.01f
+                    scaleY = 1f + glassInteraction.pressProgress * 0.015f
+                }
+                .then(if (backdrop != null) Modifier.drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { shape },
+                    effects = {
+                        cupertinoGlassEffects(
+                            12.dp.toPx(),
+                            CupertinoGlassDefaults.refractionHeight.toPx(),
+                            CupertinoGlassDefaults.refractionAmount.toPx(),
+                        )
+                    },
+                    highlight = { Highlight.Default.copy(alpha = 0.35f) },
+                    onDrawSurface = { drawRect(glassTint) },
+                ).glassEdge(shape, softShadow = true) else Modifier)
+                .then(
+                    if (tokenConfig != null) {
+                        Modifier.onPreviewKeyEvent { event ->
+                            editable &&
+                                event.type == KeyEventType.KeyDown &&
+                                event.key == Key.Backspace &&
+                                dispatch(SearchTokenEditAction.Backspace)
+                        }
+                    } else {
+                        Modifier
+                    },
+                )
+                .focusable()
+                // after focusable(): targets the inner text field, so tapping a token can focus it
+                .focusRequester(fieldFocusRequester)
+        val fieldTrailingIcon: @Composable () -> Unit = {
+            Box(alpha) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    trailingIcon()
+                    if ((value.isNotEmpty() || tokens.isNotEmpty()) && editable) {
+                        CupertinoIconButton(
+                            onClick = {
+                                if (tokenConfig == null) {
+                                    onValueChange("")
+                                } else {
+                                    dispatch(SearchTokenEditAction.ClearAll)
+                                }
+                            },
+                            modifier = Modifier.size(44.dp),
+                            colors = plainButtonColors(),
+                        ) {
+                            CupertinoIcon(
+                                imageVector = CupertinoIcons.Filled.XmarkCircle,
+                                contentDescription = "검색어 지우기",
+                                modifier = Modifier.size(18.dp),
+                                tint = colors.trailingIconColor(
+                                    enabled = enabled,
+                                    isError = false,
+                                    interactionSource = interactionSource,
+                                ).value,
                             )
-                        },
-                        highlight = { Highlight.Default.copy(alpha = 0.35f) },
-                        onDrawSurface = { drawRect(glassTint) },
-                    ).glassEdge(shape, softShadow = true) else Modifier)
-                    .focusable(),
-            value = value,
-            onValueChange = onValueChange,
+                        }
+                    }
+                }
+            }
+        }
+        val fieldLeadingIcon: @Composable () -> Unit = {
+            if (tokenConfig == null) {
+                Box(alpha) {
+                    leadingIcon()
+                }
+            } else {
+                Row(
+                    modifier = alpha,
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    leadingIcon()
+                    if (tokens.isNotEmpty()) {
+                        CupertinoSearchTokenStrip(
+                            tokens = tokens,
+                            selectedTokenIndex = editState.selectedTokenIndex,
+                            editable = editable,
+                            onSelect = {
+                                fieldFocusRequester.requestFocus()
+                                dispatch(SearchTokenEditAction.SelectToken(it))
+                            },
+                            onRemove = { dispatch(SearchTokenEditAction.RemoveToken(it)) },
+                            tokenContent = tokenConfig.token,
+                            labels = tokenConfig.labels,
+                        )
+                    }
+                }
+            }
+        }
+        val fieldPlaceholder: @Composable () -> Unit = {
+            // like UISearchTextField, the placeholder is hidden once a token is present
+            if (tokens.isEmpty()) {
+                Box(alpha) {
+                    placeholder()
+                }
+            }
+        }
+
+        if (tokenConfig == null) {
+            CupertinoBorderedTextField(
+                modifier = fieldModifier,
+                value = value,
+                onValueChange = onValueChange,
             enabled = enabled,
             readOnly = readOnly,
             colors = colors,
@@ -347,42 +701,33 @@ fun CupertinoSearchTextField(
             paddingValues = PaddingValues(horizontal = 12.dp),
             visualTransformation = visualTransformation,
             interactionSource = interactionSource,
-            trailingIcon = {
-                Box(alpha) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        trailingIcon()
-                        if (value.isNotEmpty() && enabled && !readOnly) {
-                            CupertinoIconButton(
-                                onClick = { onValueChange("") },
-                                modifier = Modifier.size(44.dp),
-                                colors = plainButtonColors(),
-                            ) {
-                                CupertinoIcon(
-                                    imageVector = CupertinoIcons.Filled.XmarkCircle,
-                                    contentDescription = "검색어 지우기",
-                                    modifier = Modifier.size(18.dp),
-                                    tint = colors.trailingIconColor(
-                                        enabled = enabled,
-                                        isError = false,
-                                        interactionSource = interactionSource,
-                                    ).value,
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            leadingIcon = {
-                Box(alpha) {
-                    leadingIcon()
-                }
-            },
-            placeholder = {
-                Box(alpha) {
-                    placeholder()
-                }
-            },
-        )
+                trailingIcon = fieldTrailingIcon,
+                leadingIcon = fieldLeadingIcon,
+                placeholder = fieldPlaceholder,
+            )
+        } else {
+            CupertinoBorderedTextField(
+                modifier = fieldModifier,
+                value = tokenFieldValue,
+                onValueChange = onTokenFieldValueChange,
+            enabled = enabled,
+            readOnly = readOnly,
+            colors = colors,
+            textStyle = textStyle,
+            shape = shape,
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            singleLine = true,
+            maxLines = 1,
+            minLines = 1,
+            paddingValues = PaddingValues(horizontal = 12.dp),
+            visualTransformation = tokenVisualTransformation,
+            interactionSource = interactionSource,
+                trailingIcon = fieldTrailingIcon,
+                leadingIcon = fieldLeadingIcon,
+                placeholder = fieldPlaceholder,
+            )
+        }
 
         if (cancelButton != null) {
             CompositionLocalProvider(

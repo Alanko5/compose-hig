@@ -27,13 +27,16 @@ import platform.UIKit.UIColorPickerViewController
 import platform.UIKit.UIColorPickerViewControllerDelegateProtocol
 import platform.darwin.NSObject
 
+/**
+ * Presents the system `UIColorPickerViewController` while this composable is in the composition.
+ */
 @Composable
 @ExperimentalCupertinoApi
-fun CupertinoColorPickerNative(
+actual fun CupertinoColorPickerNative(
     color: Color,
     onColorChanged: (Color) -> Unit,
     onDismissRequest: () -> Unit,
-    supportsAlpha: Boolean = true,
+    supportsAlpha: Boolean,
 ) {
     val updatedOnColorChanged by rememberUpdatedState(onColorChanged)
     val updatedOnDismissRequest by rememberUpdatedState(onDismissRequest)

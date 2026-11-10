@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -66,6 +67,36 @@ fun CupertinoPageControl(
         "Page ${page + 1} of $count"
     },
 ) {
+    val colorScheme = CupertinoTheme.colorScheme
+    CupertinoPageControlLayout(
+        pageCount = pageCount,
+        currentPage = currentPage,
+        onPageSelected = onPageSelected,
+        modifier = modifier.fillMaxWidth(),
+        pageDescription = pageDescription,
+        selectedIndicatorColor = colorScheme.label,
+        indicatorColor = colorScheme.tertiaryLabel,
+        backgroundAlpha = { 1f },
+    )
+}
+
+/**
+ * [CupertinoPageControl]의 공용 레이아웃입니다. 너비를 채우지 않고 캡슐 크기만큼만 차지하며,
+ * 점 색상과 캡슐 배경의 불투명도를 바꿀 수 있습니다. [CupertinoPageTabView]에서 재사용합니다.
+ *
+ * @param backgroundAlpha 캡슐 배경의 불투명도. 그리기 단계에서만 읽습니다.
+ */
+@Composable
+internal fun CupertinoPageControlLayout(
+    pageCount: Int,
+    currentPage: Int,
+    onPageSelected: (Int) -> Unit,
+    modifier: Modifier,
+    pageDescription: (page: Int, pageCount: Int) -> String,
+    selectedIndicatorColor: Color,
+    indicatorColor: Color,
+    backgroundAlpha: () -> Float,
+) {
     require(pageCount > 0) { "페이지 수는 1 이상이어야 합니다." }
     require(currentPage in 0 until pageCount) { "현재 페이지는 전체 페이지 범위 안에 있어야 합니다." }
 
@@ -92,15 +123,14 @@ fun CupertinoPageControl(
     val backdrop = LocalCupertinoBackdrop.current ?: rememberDefaultBackdrop()
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(PageControlTokens.ComponentHeight),
+        modifier = modifier.height(PageControlTokens.ComponentHeight),
         contentAlignment = Alignment.Center,
     ) {
         CupertinoSurface(
             modifier = Modifier
                 .width(capsuleWidth)
                 .height(PageControlTokens.Height)
+                .graphicsLayer { alpha = backgroundAlpha() }
                 .drawBackdrop(
                     backdrop = backdrop,
                     shape = { CircleShape },
@@ -156,7 +186,7 @@ fun CupertinoPageControl(
                         Modifier
                             .size(indicatorSize)
                             .background(
-                                color = if (selected) colorScheme.label else colorScheme.tertiaryLabel,
+                                color = if (selected) selectedIndicatorColor else indicatorColor,
                                 shape = CircleShape,
                             ),
                     )

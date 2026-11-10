@@ -754,7 +754,7 @@ private fun BottomSheetScaffoldLayout(
     }
 }
 
-private fun BottomSheetScaffoldAnchorChangeHandler(
+internal fun BottomSheetScaffoldAnchorChangeHandler(
     state: CupertinoSheetState,
     animateTo: (target: CupertinoSheetValue, velocity: Float) -> Unit,
     snapTo: (target: CupertinoSheetValue) -> Unit,
@@ -781,8 +781,11 @@ private fun BottomSheetScaffoldAnchorChangeHandler(
             if (state.swipeableState.isAnimationRunning) {
                 // Re-target the animation to the new offset if it changed
                 animateTo(newTarget, state.swipeableState.lastVelocity)
-            } else {
-                // Snap to the new offset value of the target if no animation was running
+            } else if (!state.trySnapTo(newTarget)) {
+                // Snap in place when nothing holds the sheet: a snap deferred to a later dispatch
+                // would cancel an animation started in between, e.g. a show() right after the host
+                // window was resized (the Android full-screen cover dialog grows to edge-to-edge
+                // after its first layout). Only defer when another interaction holds the sheet.
                 snapTo(newTarget)
             }
         }

@@ -37,6 +37,15 @@ kotlin {
             api(libs.backdrop)
         }
 
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation("org.jetbrains.compose.ui:ui-test:${libs.plugins.compose.multiplatform.get().version}")
+        }
+
+        desktopTest.dependencies {
+            implementation(compose.desktop.currentOs)
+        }
+
         iosTest.dependencies {
             implementation(kotlin("test"))
             implementation("org.jetbrains.compose.ui:ui-test:${libs.plugins.compose.multiplatform.get().version}")

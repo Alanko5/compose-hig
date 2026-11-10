@@ -38,6 +38,7 @@ kotlin {
             api(libs.compose.material3)
             api(libs.compose.adaptive)
             api(libs.compose.adaptive.navigation3)
+            implementation(libs.navigationevent.compose)
             implementation(projects.higCore)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)

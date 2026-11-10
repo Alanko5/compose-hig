@@ -30,16 +30,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.isSpecified
-import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.util.fastForEachIndexed
-import androidx.compose.ui.util.fastMap
-import androidx.compose.ui.util.fastSumBy
 import com.kyant.capsule.ContinuousRoundedRectangle
-import zone.ien.hig.CupertinoHorizontalDivider
 import zone.ien.hig.CupertinoSurface
 import zone.ien.hig.ExperimentalCupertinoApi
-import zone.ien.hig.theme.CupertinoTheme
 
 /**
  * iOS-like list section.
@@ -124,40 +117,11 @@ fun CupertinoSection(
                         shape = shape,
                         color = color,
                     ) {
-                        val showDivider = style != SectionStyle.Sidebar &&
-                            CupertinoTheme.colorScheme.separator.let { it.isSpecified && it != Color.Transparent }
-
-                        SubcomposeLayout { constraints ->
-                            val measurables = subcompose(null) { content(SectionScopeImpl) }
-
-                            val dividers =
-                                subcompose(Unit) {
-                                    if (showDivider) {
-                                        repeat(measurables.size - 1) {
-                                            CupertinoHorizontalDivider(
-                                                modifier = Modifier.padding(dividerPadding),
-                                            )
-                                        }
-                                    }
-                                }.fastMap { it.measure(constraints) }
-
-                            val placeables = measurables.fastMap { it.measure(constraints) }
-
-                            layout(
-                                width = constraints.maxWidth,
-                                height = (placeables + dividers).fastSumBy { it.height },
-                            ) {
-                                var h = 0
-                                placeables.fastForEachIndexed { i, p ->
-                                    p.place(0, h)
-                                    h += p.height
-
-                                    if (showDivider && i < placeables.lastIndex) {
-                                        dividers[i].place(0, h)
-                                        h += dividers[i].height
-                                    }
-                                }
-                            }
+                        SectionItemsLayout(
+                            showDivider = sectionShowsDividers(style),
+                            dividerPadding = dividerPadding,
+                        ) {
+                            content(SectionScopeImpl)
                         }
                     }
 
